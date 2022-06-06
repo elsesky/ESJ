@@ -220,6 +220,7 @@ class esj:
             return -1
 
         tids =  re.findall(r'<a(.*)/(.*)\.html\" target=',cptext)
+        cpnames = re.findall(r'"_blank" data-title="(.*)"><p>',cptext)
         # 如果返回的章节数为0，则可能是调用其他网站的连接，需要提示。
         if len(tids) < 1:
             do_log(self._modname ,'root' ,"该小说的内容为外部连接，无法采集，请直接访问网站查看。")
@@ -232,6 +233,30 @@ class esj:
             #     order_num = order_num + 1
             #     continue
             tid = tds[1]
+            # 取章节名字的时候顺道用了order_num，注意后面改动order_num的时候会有影响
+            try:
+                cpname = cpnames[order_num - 1]
+            except Exception,e:
+                pass
+                continue
+            #跳过已经有的（通过数据库检查）
+            tid_count = self.get_tid_count(tid)
+            if tid_count > 0:
+                # do_log(self._modname ,'root' ,"|跳过章节:" + t_title + "|")
+                # 如果存在，跳过，但是要更新排序号（因为可能由于插入中间章节，导致序号会变）
+                cursor = self._DB.cursor()
+                sql = "UPDATE " + self._DB_PREFIX + self._CLASS_NAME + "chapters SET order_num=" + str(order_num) + " WHERE id=" + tid
+                try:
+                    do_log(self._modname ,'root' ,"更新章节|[ID:" + str(tid) + "][CPNAME:" + cpname + "]|排序为：" + str(order_num))
+                    cursor.execute(sql)
+                    self._DB.commit()
+                    # 由于这里会跳过，记得让序号自增
+                    order_num = order_num + 1
+                except Exception,e:
+                    print e
+                    self._DB.rollback()
+                    do_log(self._modname ,'root' ,'Unknown ERR!')
+                continue
             # ----------------进章节采集-----------------------------
             turl = self._N_XZ_CONTENT + t__id + "/" + tid + ".html"
             tl_content = self.open(turl)
@@ -269,25 +294,7 @@ class esj:
             t_all_text_org = self.addslashes("\n\n" + str(order_num).zfill(5) + " - " + t_title + "\n\n" + t_text)
             t_title_print = t_title.replace('・','')
             # ---------------------入库---------------------------------
-            #跳过已经有的（通过数据库检查）
-            tid_count = self.get_tid_count(tid)
-            if tid_count > 0:
-                # do_log(self._modname ,'root' ,"|跳过章节:" + t_title + "|")
-                # 如果存在，跳过，但是要更新排序号（因为可能由于插入中间章节，导致序号会变）
-                cursor = self._DB.cursor()
-                sql = "UPDATE " + self._DB_PREFIX + self._CLASS_NAME + "chapters SET order_num=" + str(order_num) + " WHERE id=" + tid
-                try:
-                    do_log(self._modname ,'root' ,"更新章节|" + t_title_print + "|排序为：" + str(order_num))
-                    cursor.execute(sql)
-                    self._DB.commit()
-                    # 由于这里会跳过，记得让序号自增
-                    order_num = order_num + 1
-                except Exception,e:
-                    print e
-                    self._DB.rollback()
-                    do_log(self._modname ,'root' ,'Unknown ERR!')
-                continue
-            do_log(self._modname ,'root' ,"|新增章节:" + t_title_print + "|")
+            do_log(self._modname ,'root' ,"|新增章节:|[ID:" + str(tid) + "][CPNAME:" + t_title_print + "]|排序为：" + str(order_num))
             # t_id：小说ID，tid：章节ID，t_title：章节名称，t_all_text_html：带HTML转义字符的文本串，t_all_text_org:去掉HTML转义字符的文本串
             try:
                 result = self.do_photoinsert(t__id, tid, self.addslashes(t_title), t_all_text_html, t_all_text_org,str(order_num))

@@ -8,7 +8,7 @@ import py2exe,time
 
 from glob import glob
 
-VERSION = "0.2.0." + str(int(time.time()))
+VERSION = "0.2.1." + str(int(time.time()))
 
 data_files = [
    ('', ['cacert.pem']),
